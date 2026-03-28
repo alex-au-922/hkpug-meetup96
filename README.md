@@ -116,3 +116,17 @@ response = requests.post(url, cert=certs, verify="ca.crt")
 print(response.json())
 ```
 Watch your main Python script react to the incoming data, and check your Dashboard to see your score!
+
+---
+
+## 📊 Scoring & Rules
+
+*(Instructors will unlock levels as the workshop progresses!)*
+
+### The Physics Engine
+* **Heating:** When AC is OFF, the room heats up by `+0.5°C/min`.
+* **Cooling:** When AC is ON, the room cools down by `-1.0°C/min`.
+
+### Level 1: Hello World
+*Just get the AC running and keep the room cool!*
+* If Temp <= 28.0°C ➡️ **+10 pts / min**
