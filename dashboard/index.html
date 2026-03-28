@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Project Cool Down | Local Edition</title>
+        <style>
+            body {
+                font-family: monospace;
+                background-color: #121212;
+                color: #e0e0e0;
+                padding: 20px;
+            }
+            .container {
+                display: flex;
+                gap: 20px;
+            }
+            .env-card {
+                background: #1e1e1e;
+                padding: 20px;
+                border-radius: 8px;
+                flex: 1;
+                border: 2px solid #333;
+            }
+            .prod {
+                border-color: #d32f2f;
+            }
+            h1 {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            .metric {
+                font-size: 1.5em;
+                margin: 10px 0;
+            }
+            .ac-status {
+                font-weight: bold;
+                font-size: 2em;
+                padding: 10px;
+                text-align: center;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }
+            .ac-off {
+                background: #555;
+                color: #ccc;
+            }
+            .ac-on {
+                background: #0288d1;
+                color: white;
+            }
+            .ac-broken {
+                background: #d32f2f;
+                color: white;
+                animation: blink 1s infinite;
+            }
+            @keyframes blink {
+                50% {
+                    opacity: 0.5;
+                }
+            }
+            .logs {
+                background: #000;
+                color: #0f0;
+                padding: 10px;
+                height: 200px;
+                overflow-y: auto;
+                font-size: 0.9em;
+                border-radius: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🧊 Project Cool Down (Local Edition)</h1>
+        <div class="container">
+            <!-- STAGING -->
+            <div class="env-card">
+                <h2>🧪 STAGING (Sandbox)</h2>
+                <div id="staging-ac" class="ac-status ac-off">AC OFF</div>
+                <div class="metric">
+                    Level: <span id="staging-level">0</span>
+                </div>
+                <div class="metric">
+                    Sim Time: <span id="staging-time">0</span> min
+                </div>
+                <div class="metric">
+                    Score: <span id="staging-score">0</span>
+                </div>
+                <div class="metric">
+                    Temp: <span id="staging-temp">--</span> °C
+                </div>
+                <div class="metric">
+                    Distance: <span id="staging-dist">--</span> km
+                </div>
+                <div class="metric">
+                    Wife Home: <span id="staging-wife">False</span>
+                </div>
+                <h3>Logs</h3>
+                <div id="staging-logs" class="logs"></div>
+            </div>
+            <!-- PROD -->
+            <div class="env-card prod">
+                <h2>🚨 PROD (Leaderboard)</h2>
+                <div id="prod-ac" class="ac-status ac-off">AC OFF</div>
+                <div class="metric">Level: <span id="prod-level">0</span></div>
+                <div class="metric">
+                    Sim Time: <span id="prod-time">0</span> min
+                </div>
+                <div class="metric">Score: <span id="prod-score">0</span></div>
+                <div class="metric">
+                    Temp: <span id="prod-temp">--</span> °C
+                </div>
+                <div class="metric">
+                    Distance: <span id="prod-dist">--</span> km
+                </div>
+                <div class="metric">
+                    Wife Home: <span id="prod-wife">False</span>
+                </div>
+                <h3>Logs</h3>
+                <div id="prod-logs" class="logs"></div>
+            </div>
+        </div>
+
+        <script>
+            async function fetchState() {
+                try {
+                    const cacheBuster = new Date().getTime();
+                    const res = await fetch(
+                        `/shared/state.json?t=${cacheBuster}`,
+                        { cache: "no-store" },
+                    );
+                    const data = await res.json();
+                    updateUI("staging", data.staging);
+                    updateUI("prod", data.prod);
+                } catch (e) {}
+            }
+
+            function updateUI(env, state) {
+                document.getElementById(`${env}-level`).innerText = state.level;
+                document.getElementById(`${env}-time`).innerText =
+                    state.current_minute;
+                document.getElementById(`${env}-score`).innerText = state.score;
+                document.getElementById(`${env}-temp`).innerText =
+                    state.temp_c.toFixed(1);
+                document.getElementById(`${env}-dist`).innerText =
+                    state.distance_km === null
+                        ? "NULL"
+                        : state.distance_km.toFixed(2);
+                document.getElementById(`${env}-wife`).innerText =
+                    state.wife_is_home;
+
+                const acBox = document.getElementById(`${env}-ac`);
+                if (state.broken_compressor) {
+                    acBox.className = "ac-status ac-broken";
+                    acBox.innerText = "🔥 COMPRESSOR EXPLODED 🔥";
+                } else if (state.ac_status) {
+                    acBox.className = "ac-status ac-on";
+                    acBox.innerText = "❄️ AC ON ❄️";
+                } else {
+                    acBox.className = "ac-status ac-off";
+                    acBox.innerText = "AC OFF";
+                }
+                document.getElementById(`${env}-logs`).innerHTML =
+                    state.logs.join("<br>");
+            }
+            setInterval(fetchState, 1000);
+        </script>
+    </body>
+</html>

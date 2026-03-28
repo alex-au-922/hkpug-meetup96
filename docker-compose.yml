@@ -1,0 +1,87 @@
+services:
+  # 1. CROSS-PLATFORM CERTIFICATE GENERATOR
+  cert-maker:
+    image: alpine:latest
+    volumes:
+      - ./certs:/certs
+    command: >
+      sh -c "
+      apk add --no-cache openssl &&
+      if [ ! -f /certs/server/server.crt ]; then
+        echo 'Generating mTLS Certificates...'
+        mkdir -p /certs/ca /certs/server /certs/client
+
+        # 1. Root CA
+        openssl req -new -x509 -days 3650 -nodes -keyout /certs/ca/ca.key -out /certs/ca/ca.crt -subj '/CN=CoolDown Root CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign'
+
+        # 2. Server Certs
+        openssl genrsa -out /certs/server/server.key 2048
+        openssl req -new -key /certs/server/server.key -out /certs/server/server.csr -subj '/CN=localhost'
+
+        # FOOLPROOF CONFIG WRITING
+        echo 'basicConstraints=CA:FALSE' > /certs/server/extfile.cnf
+        echo 'keyUsage=digitalSignature,keyEncipherment' >> /certs/server/extfile.cnf
+        echo 'extendedKeyUsage=serverAuth,clientAuth' >> /certs/server/extfile.cnf
+        echo 'subjectAltName=DNS:localhost,DNS:mosquitto,DNS:backend,IP:127.0.0.1' >> /certs/server/extfile.cnf
+
+        openssl x509 -req -in /certs/server/server.csr -CA /certs/ca/ca.crt -CAkey /certs/ca/ca.key -CAcreateserial -out /certs/server/server.crt -days 365 -extfile /certs/server/extfile.cnf
+
+        # 3. Client Certs
+        openssl genrsa -out /certs/client/client.key 2048
+        openssl req -new -key /certs/client/client.key -out /certs/client/client.csr -subj '/CN=Player 1'
+
+        # FOOLPROOF CONFIG WRITING
+        echo 'basicConstraints=CA:FALSE' > /certs/client/extfile.cnf
+        echo 'keyUsage=digitalSignature,keyEncipherment' >> /certs/client/extfile.cnf
+        echo 'extendedKeyUsage=clientAuth' >> /certs/client/extfile.cnf
+
+        openssl x509 -req -in /certs/client/client.csr -CA /certs/ca/ca.crt -CAkey /certs/ca/ca.key -CAcreateserial -out /certs/client/client.crt -days 365 -extfile /certs/client/extfile.cnf
+
+        chmod -R 777 /certs
+        echo 'Certificates ready!'
+      else
+        echo 'Certificates already exist. Skipping.'
+      fi
+      "
+
+  # 2. SECURE MQTT BROKER
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    ports:
+      - "8883:8883"
+    depends_on:
+      cert-maker:
+        condition: service_completed_successfully
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./certs:/mosquitto/certs:ro
+    restart: unless-stopped
+
+  # 3. SECURE GAME ENGINE
+  backend:
+    build: ./backend
+    container_name: backend
+    environment:
+      - TEAM_ID=local
+      - MQTT_BROKER=mosquitto
+    ports:
+      - "8000:8000"
+    depends_on:
+      cert-maker:
+        condition: service_completed_successfully
+    volumes:
+      - ./certs:/certs:ro
+      - ./shared:/shared:rw
+    restart: unless-stopped
+
+  # 4. VISUAL DASHBOARD
+  dashboard:
+    image: nginx:alpine
+    container_name: dashboard
+    ports:
+      - "9000:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html
+      - ./shared:/usr/share/nginx/html/shared:ro
+    restart: unless-stopped

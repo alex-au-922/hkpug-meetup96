@@ -1,141 +1,142 @@
-# 🧊 Project Cool Down: Participant Starter Guide
+# 🧊 Project Cool Down: Home Edition
 
-Welcome to the HKPUG Systems Engineering Workshop. You are tasked with building a smart, autonomous AI to control a home Air Conditioning unit based on live IoT data.
+Welcome to the Home Edition of the HKPUG Systems Engineering Challenge! 
+In this simulator, you will build a smart, autonomous Python AI to control a home Air Conditioning unit based on messy, real-world IoT data.
 
-You have been assigned to a **Team (A or B)**, and your local Raspberry Pi server acts as your "Home Gateway".
+This local environment runs entirely on your machine using Docker. It automatically provisions an enterprise-grade Zero-Trust mTLS network, a physics engine, and a live visual dashboard.
+
+---
 
 ## 📦 Step 0: Prerequisites
-Before you write any code, install the required Python libraries. Create a `requirements.txt` file with the following:
-```text
-paho-mqtt==1.6.1
-requests
-```
-Install them via terminal:
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+2. Install Python 3.10+.
+3. Install the required Python libraries for your AI script:
+   ```bash
+   pip install paho-mqtt==1.6.1 requests
+   ```
+
+---
+
+## 🚀 Step 1: Boot the Environment
+Open your terminal in this folder and run:
 ```bash
-pip install -r requirements.txt
+docker compose up -d --build
 ```
+**What happens behind the scenes?**
+1. Docker temporarily boots an Alpine Linux container to generate secure **mTLS Certificates** specific to your machine.
+2. The certificates are placed in a new `certs/` folder on your hard drive.
+3. The secure MQTT Broker (Mosquitto) and Physics Engine (FastAPI) boot up.
+4. The Visual Dashboard boots up.
+
+Verify it is working by opening your web browser to: 👉 **[http://localhost:9000](http://localhost:9000)**
 
 ---
 
-## 🛠️ Step 1: Security Setup (mTLS)
-Your server enforces **Zero-Trust Security**. You cannot subscribe to data or send commands without proving your identity.
-1. Go to your assigned Dashboard URL (e.g., `http://<HOSTNAME>:9001`).
-2. Click the blue button to download your `certs.zip` file.
-3. Extract `ca.crt`, `client.crt`, and `client.key` into your Python project folder.
+## 🔐 Step 2: The Security Certificates (mTLS)
+Because this simulates a real enterprise IoT network, you cannot connect to the data streams or send commands without proving your identity. 
+
+Your Docker stack generated your keys inside the `./certs` folder. You will use these 3 files in your Python code:
+* **Root CA:** `certs/ca/ca.crt` (To verify the server)
+* **Client Cert:** `certs/client/client.crt` (Your public ID)
+* **Client Key:** `certs/client/client.key` (Your private password)
 
 ---
 
-## 📡 Step 2: The MQTT Data Stream (Sensors)
-The Raspberry Pi emits sensor data exactly once per second (1 real second = 1 simulated minute). 
-There are 3 separate sensor topics you must subscribe to:
+## 📡 Step 3: Connecting to the Data (MQTT)
+The physics engine emits sensor data every second (1 real second = 1 simulated minute). 
+You must subscribe to these topics:
+* `cooldown/team_local/<ENV>/sensors/room` (Temperature)
+* `cooldown/team_local/<ENV>/sensors/gps` (Distance from home)
+* `cooldown/team_local/<ENV>/sensors/occupancy` (Wife presence)
 
-* **Room Temperature:** `cooldown/team_<YOUR_TEAM>/<ENV>/sensors/room`
-* **GPS Distance:** `cooldown/team_<YOUR_TEAM>/<ENV>/sensors/gps`
-* **Occupancy (Wife):** `cooldown/team_<YOUR_TEAM>/<ENV>/sensors/occupancy`
+*(Note: `<ENV>` will be `staging` for practice, and `prod` for the official run).*
 
-*Note: Replace `<YOUR_TEAM>` with `a` or `b`. Replace `<ENV>` with `staging` or `prod`.*
-
-### MQTT Python Connection Example:
+**Python MQTT Snippet:**
 ```python
 import paho.mqtt.client as mqtt
 
-# Define your environment
-TEAM = "<YOUR_TEAM>"
-ENV = "staging"  # Change to 'prod' during the official tournament!
-HOSTNAME = "<HOSTNAME>" # Update to your assigned Pi's hostname or IP
-
 def on_message(client, userdata, msg):
-    print(f"Received on {msg.topic}: {msg.payload.decode()}")
+    print(f"Received: {msg.topic} -> {msg.payload.decode()}")
 
 client = mqtt.Client()
 
-# Security: Attach your certificates!
-client.tls_set(ca_certs="ca.crt", certfile="client.crt", keyfile="client.key")
-client.tls_insecure_set(True)
+# Attach your secure identity!
+client.tls_set(
+    ca_certs="certs/ca/ca.crt", 
+    certfile="certs/client/client.crt", 
+    keyfile="certs/client/client.key"
+)
 
 client.on_message = on_message
-client.connect(HOSTNAME, 8883)
-
-# Subscribe to ALL sensor topics using the # wildcard
-client.subscribe(f"cooldown/team_{TEAM}/{ENV}/sensors/#") 
+client.connect("localhost", 8883)
+client.subscribe("cooldown/team_local/staging/sensors/#") 
 client.loop_forever()
 ```
 
 ---
 
-## 🎛️ Step 3: The REST API (Control)
+## 🎛️ Step 4: Sending Commands (REST API)
 To turn the AC on or off, you must send an HTTP POST request to the API.
 
-* **URL:** `https://<HOSTNAME>:8001/api/<ENV>/ac`
-* **Method:** `POST`
-* **Payload:** `{"command": "ON"}` or `{"command": "OFF"}`
-
-### REST API Python Connection Example:
+**Python API Snippet:**
 ```python
 import requests
-import urllib3
 
-# Suppress warnings for local DNS certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+url = "https://localhost:8000/api/staging/ac"
+certs = ("certs/client/client.crt", "certs/client/client.key")
+payload = {"command": "ON"} # or "OFF"
 
-HOSTNAME = "<HOSTNAME>" # Update to your assigned Pi
-ENV = "staging"
-PORT = 8001 # Port 8001 for Team A, 8002 for Team B
-
-url = f"https://{HOSTNAME}:{PORT}/api/{ENV}/ac"
-certs = ("client.crt", "client.key")
-payload = {"command": "ON"}
-
-response = requests.post(url, json=payload, cert=certs, verify="ca.crt")
+# We pass verify="certs/ca/ca.crt" to securely verify the local server!
+response = requests.post(url, json=payload, cert=certs, verify="certs/ca/ca.crt")
 print(response.json())
 ```
 
 ---
 
-## 🧪 Step 4: How to Test Your Code (The Digital Twin)
-**DO NOT TEST IN PROD.** 
-If you crash the Prod server, your official score is ruined. Use your Staging environment.
-
-You can trigger a fast, 60-second staging simulation whenever you want. Create a file called `trigger_staging.py` and run it in a separate terminal:
+## 🧪 Step 5: How to Test Your AI (The Digital Twin)
+The physics engine is paused until you tell it to start. 
+You can trigger a fast, 60-second staging simulation whenever you want by running this Python script in a separate terminal:
 
 ```python
+# trigger_staging.py
 import requests
-import urllib3
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+url = "https://localhost:8000/api/staging/start?level=1" # Change level here!
+certs = ("certs/client/client.crt", "certs/client/client.key")
 
-HOSTNAME = "<HOSTNAME>"
-PORT = 8001
-ENV = "staging"
-LEVEL = 1  # Change this to test harder levels!
-
-url = f"https://{HOSTNAME}:{PORT}/api/{ENV}/start?level={LEVEL}"
-certs = ("client.crt", "client.key")
-
-print(f"🚀 Triggering {ENV.upper()} Simulation - Level {LEVEL}...")
-response = requests.post(url, cert=certs, verify="ca.crt")
+print("🚀 Triggering Staging Simulation...")
+response = requests.post(url, cert=certs, verify="certs/ca/ca.crt")
 print(response.json())
 ```
-Watch your main Python script react to the incoming data, and check your Dashboard to see your score!
+Run your AI script, then run this trigger script, and watch your Dashboard score go up!
 
 ---
 
-## 📊 Scoring & Rules
+## 📊 The Rules & Scoring
 
-*(Instructors will unlock levels as the workshop progresses!)*
-
-### The Physics Engine
+### 🌍 The Physics Engine
 * **Heating:** When AC is OFF, the room heats up by `+0.5°C/min`.
 * **Cooling:** When AC is ON, the room cools down by `-1.0°C/min`.
 
-### Level 1: Hello World
+### 🟢 Level 1: Hello World
 *Just get the AC running and keep the room cool!*
 * If Temp <= 28.0°C ➡️ **+10 pts / min**
 
-### Level 2: The Goldilocks Zone
-*Optimize your pre-cooling.*
+### 🟡 Level 2: The Goldilocks Zone
+*Electricity is expensive. Optimize your pre-cooling to hit the 21°C - 27°C window.*
 * User is Far (>1.5km) & AC is OFF ➡️ **+10 pts / min (Eco Mode)**
 * User is Far (>1.5km) & AC is ON ➡️ **-20 pts / min (Wasting Power)**
 * User is Close (<=1.5km) & Temp > 27.0°C ➡️ **-50 pts / min (Too Hot)**
 * User is Close (<=1.5km) & Temp < 21.0°C ➡️ **-20 pts / min (Freezing)**
 * User is Close (<=1.5km) & Temp is 21.0°C - 27.0°C ➡️ **+10 pts / min (Perfect!)**
+
+### 🟠 Level 3: Compressor Protection
+*Real sensors are noisy. Hardware breaks.*
+* **99.9°C Spikes:** The temperature sensor will occasionally glitch. If you don't filter it, your AI will panic.
+* **5-Minute Hardware Lock:** If you toggle the AC state in under 5 minutes, the compressor violently explodes.
+* **Penalty:** **-500 pts** and the AC is permanently destroyed for the run.
+
+### 🔴 Level 4 & 5: The Boss Fight
+*The network drops your requests, and the Wife is home!*
+* **Network Blips:** 10% of your API requests will return `HTTP 503`. You must implement Retries!
+* **W.A.F Penalty:** If the Wife is Home, the AC is OFF, and Temp > 27.0°C ➡️ **-100 pts / min** *(She overrides the GPS distance rules!)*
