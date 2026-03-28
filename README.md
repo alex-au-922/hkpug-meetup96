@@ -103,7 +103,7 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-HOSTNAME = "worker-arm-01" 
+HOSTNAME = "<HOSTNAME>"
 PORT = 8001
 ENV = "staging"
 LEVEL = 1  # Change this to test harder levels!
