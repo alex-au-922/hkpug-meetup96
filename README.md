@@ -51,6 +51,7 @@ client = mqtt.Client()
 
 # Security: Attach your certificates!
 client.tls_set(ca_certs="ca.crt", certfile="client.crt", keyfile="client.key")
+client.tls_insecure_set(True)
 
 client.on_message = on_message
 client.connect(HOSTNAME, 8883)
