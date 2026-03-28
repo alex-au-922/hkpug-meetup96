@@ -130,3 +130,11 @@ Watch your main Python script react to the incoming data, and check your Dashboa
 ### Level 1: Hello World
 *Just get the AC running and keep the room cool!*
 * If Temp <= 28.0°C ➡️ **+10 pts / min**
+
+### Level 2: The Goldilocks Zone
+*Optimize your pre-cooling.*
+* User is Far (>1.5km) & AC is OFF ➡️ **+10 pts / min (Eco Mode)**
+* User is Far (>1.5km) & AC is ON ➡️ **-20 pts / min (Wasting Power)**
+* User is Close (<=1.5km) & Temp > 27.0°C ➡️ **-50 pts / min (Too Hot)**
+* User is Close (<=1.5km) & Temp < 21.0°C ➡️ **-20 pts / min (Freezing)**
+* User is Close (<=1.5km) & Temp is 21.0°C - 27.0°C ➡️ **+10 pts / min (Perfect!)**
